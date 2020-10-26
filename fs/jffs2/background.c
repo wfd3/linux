@@ -77,7 +77,7 @@ static int jffs2_garbage_collect_thread(void *_c)
 	struct jffs2_sb_info *c = _c;
 	sigset_t hupmask;
 
-	siginitset(&hupmask, sigmask(SIGHUP));
+	siginit(&hupmask, SIGHUP);
 	allow_signal(SIGKILL);
 	allow_signal(SIGSTOP);
 	allow_signal(SIGHUP);

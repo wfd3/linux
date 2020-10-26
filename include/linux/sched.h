@@ -1481,6 +1481,56 @@ static inline char task_state_to_char(struct task_struct *tsk)
 	return task_index_to_char(task_state_index(tsk));
 }
 
+static inline const char *get_task_state_name(struct task_struct *tsk)
+{
+	static const char * const task_state_array[] = {
+		
+		/* states in TASK_REPORT: */
+		"running",		/* 0x00 */
+		"sleeping",		/* 0x01 */
+		"disk sleep",		/* 0x02 */
+		"stopped",		/* 0x04 */
+		"tracing stop",		/* 0x08 */
+		"dead",			/* 0x10 */
+		"zombie",		/* 0x20 */
+		"parked",		/* 0x40 */
+		
+		/* states beyond TASK_REPORT: */
+		"idle",		        /* 0x80 */
+	};
+	
+	BUILD_BUG_ON(1 + ilog2(TASK_REPORT_MAX) != ARRAY_SIZE(task_state_array));
+	return task_state_array[task_state_index(tsk)];
+}
+
+static inline const char *get_task_state(struct task_struct *tsk)
+{
+	/*
+	 * The task state array is a strange "bitmap" of
+	 * reasons to sleep. Thus "running" is zero, and
+	 * you can test for combinations of others with
+	 * simple bit tests.
+	 */
+	static const char * const task_state_array[] = {
+		
+		/* states in TASK_REPORT: */
+		"R (running)",		/* 0x00 */
+		"S (sleeping)",		/* 0x01 */
+		"D (disk sleep)",	/* 0x02 */
+		"T (stopped)",		/* 0x04 */
+		"t (tracing stop)",	/* 0x08 */
+		"X (dead)",		/* 0x10 */
+		"Z (zombie)",		/* 0x20 */
+		"P (parked)",		/* 0x40 */
+		
+		/* states beyond TASK_REPORT: */
+		"I (idle)",		/* 0x80 */
+	};
+	
+	BUILD_BUG_ON(1 + ilog2(TASK_REPORT_MAX) != ARRAY_SIZE(task_state_array));
+	return task_state_array[task_state_index(tsk)];
+}
+
 /**
  * is_global_init - check if a task structure is init. Since init
  * is free to have sub-threads we need to check tgid.
