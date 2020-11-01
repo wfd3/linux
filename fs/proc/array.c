@@ -61,6 +61,7 @@
 #include <linux/tty.h>
 #include <linux/string.h>
 #include <linux/mman.h>
+#include <linux/sched.h>
 #include <linux/sched/mm.h>
 #include <linux/sched/numa_balancing.h>
 #include <linux/sched/task_stack.h>
@@ -118,34 +119,6 @@ void proc_task_name(struct seq_file *m, struct task_struct *p, bool escape)
 	}
 
 	seq_commit(m, ret);
-}
-
-/*
- * The task state array is a strange "bitmap" of
- * reasons to sleep. Thus "running" is zero, and
- * you can test for combinations of others with
- * simple bit tests.
- */
-static const char * const task_state_array[] = {
-
-	/* states in TASK_REPORT: */
-	"R (running)",		/* 0x00 */
-	"S (sleeping)",		/* 0x01 */
-	"D (disk sleep)",	/* 0x02 */
-	"T (stopped)",		/* 0x04 */
-	"t (tracing stop)",	/* 0x08 */
-	"X (dead)",		/* 0x10 */
-	"Z (zombie)",		/* 0x20 */
-	"P (parked)",		/* 0x40 */
-
-	/* states beyond TASK_REPORT: */
-	"I (idle)",		/* 0x80 */
-};
-
-static inline const char *get_task_state(struct task_struct *tsk)
-{
-	BUILD_BUG_ON(1 + ilog2(TASK_REPORT_MAX) != ARRAY_SIZE(task_state_array));
-	return task_state_array[task_state_index(tsk)];
 }
 
 static inline void task_state(struct seq_file *m, struct pid_namespace *ns,
@@ -228,24 +201,12 @@ static inline void task_state(struct seq_file *m, struct pid_namespace *ns,
 void render_sigset_t(struct seq_file *m, const char *header,
 				sigset_t *set)
 {
-	int i;
-
-	seq_puts(m, header);
-
-	i = _NSIG;
-	do {
-		int x = 0;
-
-		i -= 4;
-		if (sigismember(set, i+1)) x |= 1;
-		if (sigismember(set, i+2)) x |= 2;
-		if (sigismember(set, i+3)) x |= 4;
-		if (sigismember(set, i+4)) x |= 8;
-		seq_putc(m, hex_asc[x]);
-	} while (i >= 4);
-
-	seq_putc(m, '\n');
-}
+	char s[SIGSET_RENDER_LEN];
+ 
+	sigset_render(set, s);
+ 	seq_puts(m, header);
+	seq_puts(m, s);
+ }
 
 static void collect_sigign_sigcatch(struct task_struct *p, sigset_t *sigign,
 				    sigset_t *sigcatch)

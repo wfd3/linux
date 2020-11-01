@@ -30,7 +30,6 @@
 
 #include "proto.h"
 
-
 #define DEBUG_SIG 0
 
 #define _BLOCKABLE (~(sigmask(SIGKILL) | sigmask(SIGSTOP)))
@@ -44,10 +43,11 @@ asmlinkage void ret_from_sys_call(void);
 SYSCALL_DEFINE2(osf_sigprocmask, int, how, unsigned long, newmask)
 {
 	sigset_t oldmask;
-	sigset_t mask;
+	sigset_t mask = {0};
 	unsigned long res;
 
-	siginitset(&mask, newmask & _BLOCKABLE);
+	mask.sig[0] = newmask;
+	sigdel(&mask, SIGKILL, SIGSTOP);
 	res = sigprocmask(how, &mask, &oldmask);
 	if (!res) {
 		force_successful_syscall_return();
@@ -60,7 +60,7 @@ SYSCALL_DEFINE3(osf_sigaction, int, sig,
 		const struct osf_sigaction __user *, act,
 		struct osf_sigaction __user *, oact)
 {
-	struct k_sigaction new_ka, old_ka;
+  struct k_sigaction new_ka = {0}, old_ka;
 	int ret;
 
 	if (act) {
@@ -70,7 +70,7 @@ SYSCALL_DEFINE3(osf_sigaction, int, sig,
 		    __get_user(new_ka.sa.sa_flags, &act->sa_flags) ||
 		    __get_user(mask, &act->sa_mask))
 			return -EFAULT;
-		siginitset(&new_ka.sa.sa_mask, mask);
+		new_ka.sa.sa_mask.sig[0] = mask;
 		new_ka.ka_restorer = NULL;
 	}
 

@@ -598,7 +598,7 @@ SYSCALL_DEFINE3(sigaction, int, sig, const struct sigaction __user *, act,
 		if (err)
 			return -EFAULT;
 
-		siginitset(&new_ka.sa.sa_mask, mask);
+		new_ka.sa.sa_mask.sig[0] = mask;
 	}
 
 	ret = do_sigaction(sig, act ? &new_ka : NULL, oact ? &old_ka : NULL);
