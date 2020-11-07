@@ -104,8 +104,6 @@ static inline int __sigismember(sigset_t *set, int _sig)
 	return 1UL & (set->sig[sig / _NSIG_BPW] >> (sig % _NSIG_BPW));
 }
 
-#endif /* __HAVE_ARCH_SIG_BITOPS */
-
 static inline int sigisemptyset(sigset_t *set)
 {
 	sigset_t empty = {0};
@@ -137,8 +135,6 @@ static inline void name(sigset_t *r, const sigset_t *a, const sigset_t *b) \
 	case 1: 							\
 	        r->sig[0] = op(a->sig[0], b->sig[0]);			\
 		break;							\
-	default:							\
-		BUILD_BUG();						\
 	}								\
 }
 
@@ -327,8 +323,8 @@ static inline void __sigset_render(sigset_t *set, char *s)
 	int i;
 
 	for (i = _NSIG_WORDS - 1; i >= 0; i--)
-		c += scnprintf(c, SIGSET_RENDER_LEN - (s-c), __ssr_format, set->sig[1]);
-	c += scnprintf(c, SIGSET_RENDER_LEN - (c-s), "\n");
+		c += scnprintf(c, SIGSET_RENDER_LEN - (s-c), __ssr_format, set->sig[i]);
+	*c = '\n';
 }
 
 struct timespec;
@@ -457,11 +453,6 @@ extern bool unhandled_signal(struct task_struct *tsk, int sig);
  * default action of stopping the process may happen later or never.
  */
 
-#ifdef SIGEMT
-#define SIGEMT_MASK	rt_sigmask(SIGEMT)
-#else
-#define SIGEMT_MASK	0
-#endif
 
 #define sig_kernel_stop(sig)            sigismember(&__KERNEL_STOP_SIGNALS, sig)
 #define sig_kernel_ignore(sig)		sigismember(&__KERNEL_IGNORE_SIGNALS, sig)
