@@ -203,10 +203,18 @@ do {									\
 		goto label;						\
 } while(0);
 
-#define unsafe_put_sigmask(set, frame, label) \
-	unsafe_put_user(*(__u64 *)(set), \
+#define unsafe_put_compat_sigmask(set, frame, label) \
+	unsafe_put_user(*(__u64 *)(set),			 \
 			(__u64 __user *)&(frame)->uc.uc_sigmask, \
 			label)
+
+#define unsafe_put_sigmask(set, frame, label)           \
+do {                                                    \
+        int i;                                          \
+        for (i = 0; i < _NSIG_WORDS; i++)               \
+                unsafe_put_user((set)->sig[i], &(frame)->uc.uc_sigmask.sig[i], label); \
+} while(0);
+
 
 /*
  * Set up a signal frame.
@@ -566,7 +574,7 @@ static int x32_setup_rt_frame(struct ksignal *ksig,
 	restorer = ksig->ka.sa.sa_restorer;
 	unsafe_put_user(restorer, (unsigned long __user *)&frame->pretcode, Efault);
 	unsafe_put_sigcontext(&frame->uc.uc_mcontext, fp, regs, set, Efault);
-	unsafe_put_sigmask(set, frame, Efault);
+	unsafe_put_compat_sigmask(set, frame, Efault);
 	user_access_end();
 
 	if (ksig->ka.sa.sa_flags & SA_SIGINFO) {
@@ -643,8 +651,8 @@ SYSCALL_DEFINE0(rt_sigreturn)
 	frame = (struct rt_sigframe __user *)(regs->sp - sizeof(long));
 	if (!access_ok(frame, sizeof(*frame)))
 		goto badframe;
-	if (__get_user(*(__u64 *)&set, (__u64 __user *)&frame->uc.uc_sigmask))
-		goto badframe;
+	if (copy_from_user(&set, &frame->uc.uc_sigmask, sizeof(sigset_t)))
+	        goto badframe;
 	if (__get_user(uc_flags, &frame->uc.uc_flags))
 		goto badframe;
 

@@ -9,7 +9,8 @@
 
 #define _NSIG		64
 #define _NSIG_BPW	64
-#define _NSIG_WORDS	(_NSIG / _NSIG_BPW)
+/* Round up when neccessary */
+#define _NSIG_WORDS	((_NSIG + _NSIG_BPW - 1) / _NSIG_BPW)
 
 typedef unsigned long old_sigset_t;		/* at least 32 bits */
 

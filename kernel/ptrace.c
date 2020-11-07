@@ -1077,7 +1077,7 @@ int ptrace_request(struct task_struct *child, long request,
 			break;
 		}
 
-		sigdelsetmask(&new_set, sigmask(SIGKILL)|sigmask(SIGSTOP));
+		sigdel(&new_set, SIGKILL, SIGSTOP);
 
 		/*
 		 * Every thread does recalc_sigpending() after resume, so

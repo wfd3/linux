@@ -7,7 +7,8 @@
 #define _NSIG		64
 /* bits-per-word, where word apparently means 'long' not 'int' */
 #define _NSIG_BPW	BITS_PER_LONG
-#define _NSIG_WORDS	(_NSIG / _NSIG_BPW)
+/* Round up when neccessary */
+#define _NSIG_WORDS	((_NSIG + _NSIG_BPW - 1) / _NSIG_BPW)
 
 # ifndef __ASSEMBLY__
 
