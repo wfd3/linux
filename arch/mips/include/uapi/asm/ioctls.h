@@ -116,4 +116,6 @@
 #define TIOCMIWAIT	0x5491 /* wait for a change on serial input line(s) */
 #define TIOCGICOUNT	0x5492 /* read serial port inline interrupt counts */
 
+#define TIOCSTAT        0x545E  /* display process group stats on tty */
+
 #endif /* __ASM_IOCTLS_H */

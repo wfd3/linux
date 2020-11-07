@@ -70,6 +70,7 @@ struct ktermios {
 #define VDISCARD 15
 #define VMIN 16
 #define VTIME 17
+#define VSTATUS 18
 
 /* c_iflag bits */
 #define IGNBRK	0000001
@@ -187,22 +188,23 @@ struct ktermios {
 #define IBSHIFT	16
 
 /* c_lflag bits */
-#define ISIG	0x00000080
-#define ICANON	0x00000100
-#define XCASE	0x00004000
-#define ECHO	0x00000008
-#define ECHOE	0x00000002
-#define ECHOK	0x00000004
-#define ECHONL	0x00000010
-#define NOFLSH	0x80000000
-#define TOSTOP	0x00400000
-#define ECHOCTL	0x00000040
-#define ECHOPRT	0x00000020
-#define ECHOKE	0x00000001
-#define FLUSHO	0x00800000
-#define PENDIN	0x20000000
-#define IEXTEN	0x00000400
-#define EXTPROC	0x10000000
+#define ISIG	   0x00000080
+#define ICANON	   0x00000100
+#define XCASE	   0x00004000
+#define ECHO	   0x00000008
+#define ECHOE	   0x00000002
+#define ECHOK	   0x00000004
+#define ECHONL	   0x00000010
+#define NOFLSH	   0x80000000
+#define TOSTOP	   0x00400000
+#define ECHOCTL	   0x00000040
+#define ECHOPRT	   0x00000020
+#define ECHOKE	   0x00000001
+#define FLUSHO	   0x00800000
+#define PENDIN	   0x20000000
+#define IEXTEN	   0x00000400
+#define EXTPROC	   0x10000000
+#define NOKERNINFO 0x00020000
 
 /* Values for the ACTION argument to `tcflow'.  */
 #define	TCOOFF		0

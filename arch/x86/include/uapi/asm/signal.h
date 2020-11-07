@@ -60,7 +60,9 @@ typedef unsigned long sigset_t;
 
 /* These should not be considered constants from userland.  */
 #define SIGRTMIN	32
-#define SIGRTMAX	_NSIG
+#define SIGRTMAX	64
+
+#define SIGINFO         65
 
 /*
  * SA_FLAGS values:

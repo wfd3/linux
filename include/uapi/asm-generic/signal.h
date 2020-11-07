@@ -4,7 +4,7 @@
 
 #include <linux/types.h>
 
-#define _NSIG		64
+#define _NSIG		65
 #define _NSIG_BPW	__BITS_PER_LONG
 #define _NSIG_WORDS     ((_NSIG + _NSIG_BPW + 1) / _NSIG_BPW)
 
@@ -51,6 +51,9 @@
 #ifndef SIGRTMAX
 #define SIGRTMAX	64
 #endif
+
+/* Non-POSIX signals */
+#define SIGINFO         65
 
 /*
  * SA_FLAGS values:

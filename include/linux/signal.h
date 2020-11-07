@@ -440,6 +440,7 @@ extern bool unhandled_signal(struct task_struct *tsk, int sig);
  *	|  non-POSIX signal  |  default action  |
  *	+--------------------+------------------+
  *	|  SIGEMT            |  coredump	|
+ *      |  SIGINFO           |  ignore          |
  *	+--------------------+------------------+
  *
  * (+) For SIGKILL and SIGSTOP the action is "always", not just "default".

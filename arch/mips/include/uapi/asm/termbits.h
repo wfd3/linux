@@ -78,6 +78,7 @@ struct ktermios {
 #define VLNEXT		15		/* Literal-next character [IEXTEN].  */
 #define VEOF		16		/* End-of-file character [ICANON].  */
 #define VEOL		17		/* End-of-line character [ICANON].  */
+#define VSTATUS         18		/* BSD VSTATUS */
 
 /* c_iflag bits */
 #define IGNBRK	0000001		/* Ignore break condition.  */
@@ -188,23 +189,24 @@ struct ktermios {
 #define IBSHIFT 16		/* Shift from CBAUD to CIBAUD */
 
 /* c_lflag bits */
-#define ISIG	0000001		/* Enable signals.  */
-#define ICANON	0000002		/* Do erase and kill processing.  */
-#define XCASE	0000004
-#define ECHO	0000010		/* Enable echo.	 */
-#define ECHOE	0000020		/* Visual erase for ERASE.  */
-#define ECHOK	0000040		/* Echo NL after KILL.	*/
-#define ECHONL	0000100		/* Echo NL even if ECHO is off.	 */
-#define NOFLSH	0000200		/* Disable flush after interrupt.  */
-#define IEXTEN	0000400		/* Enable DISCARD and LNEXT.  */
-#define ECHOCTL 0001000		/* Echo control characters as ^X.  */
-#define ECHOPRT 0002000		/* Hardcopy visual erase.  */
-#define ECHOKE	0004000		/* Visual erase for KILL.  */
-#define FLUSHO	0020000
-#define PENDIN	0040000		/* Retype pending input (state).  */
-#define TOSTOP	0100000		/* Send SIGTTOU for background output.	*/
-#define ITOSTOP TOSTOP
-#define EXTPROC 0200000		/* External processing on pty */
+#define ISIG	   0000001		/* Enable signals.  */
+#define ICANON	   0000002		/* Do erase and kill processing.  */
+#define XCASE	   0000004
+#define ECHO	   0000010		/* Enable echo.	 */
+#define ECHOE	   0000020		/* Visual erase for ERASE.  */
+#define ECHOK	   0000040		/* Echo NL after KILL.	*/
+#define ECHONL	   0000100		/* Echo NL even if ECHO is off.	 */
+#define NOFLSH	   0000200		/* Disable flush after interrupt.  */
+#define IEXTEN	   0000400		/* Enable DISCARD and LNEXT.  */
+#define ECHOCTL    0001000		/* Echo control characters as ^X.  */
+#define ECHOPRT    0002000		/* Hardcopy visual erase.  */
+#define ECHOKE	   0004000		/* Visual erase for KILL.  */
+#define FLUSHO	   0020000
+#define PENDIN	   0040000		/* Retype pending input (state).  */
+#define TOSTOP	   0100000		/* Send SIGTTOU for background output.	*/
+#define ITOSTOP    TOSTOP
+#define EXTPROC    0200000		/* External processing on pty */
+#define NOKERNINFO 0400000	/* Suppress kernel VSTATUS message */
 
 /* ioctl (fd, TIOCSERGETLSR, &result) where result may be as below */
 #define TIOCSER_TEMT	0x01	/* Transmitter physically empty */

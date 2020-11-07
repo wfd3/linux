@@ -124,7 +124,7 @@ struct ktermios tty_std_termios = {	/* for the benefit of tty drivers  */
 	.c_oflag = OPOST | ONLCR,
 	.c_cflag = B38400 | CS8 | CREAD | HUPCL,
 	.c_lflag = ISIG | ICANON | ECHO | ECHOE | ECHOK |
-		   ECHOCTL | ECHOKE | IEXTEN,
+		   ECHOCTL | ECHOKE | IEXTEN | NOKERNINFO,
 	.c_cc = INIT_C_CC,
 	.c_ispeed = 38400,
 	.c_ospeed = 38400,

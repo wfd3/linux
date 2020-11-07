@@ -81,6 +81,8 @@ struct ktermios {
 #define VWERASE  14
 #define VLNEXT   15
 
+#define VSTATUS  17
+
 /* Kernel keeps vmin/vtime separated, user apps assume vmin/vtime is
  * shared with eof/eol
  */
@@ -207,23 +209,24 @@ struct ktermios {
 #define IBSHIFT	  16		/* Shift from CBAUD to CIBAUD */
 
 /* c_lflag bits */
-#define ISIG	0x00000001
-#define ICANON	0x00000002
-#define XCASE	0x00000004
-#define ECHO	0x00000008
-#define ECHOE	0x00000010
-#define ECHOK	0x00000020
-#define ECHONL	0x00000040
-#define NOFLSH	0x00000080
-#define TOSTOP	0x00000100
-#define ECHOCTL	0x00000200
-#define ECHOPRT	0x00000400
-#define ECHOKE	0x00000800
-#define DEFECHO 0x00001000  /* SUNOS thing, what is it? */
-#define FLUSHO	0x00002000
-#define PENDIN	0x00004000
-#define IEXTEN	0x00008000
-#define EXTPROC	0x00010000
+#define ISIG	   0x00000001
+#define ICANON	   0x00000002
+#define XCASE	   0x00000004
+#define ECHO	   0x00000008
+#define ECHOE	   0x00000010
+#define ECHOK	   0x00000020
+#define ECHONL	   0x00000040
+#define NOFLSH	   0x00000080
+#define TOSTOP	   0x00000100
+#define ECHOCTL	   0x00000200
+#define ECHOPRT	   0x00000400
+#define ECHOKE	   0x00000800
+#define DEFECHO    0x00001000  /* SUNOS thing, what is it? */
+#define FLUSHO	   0x00002000
+#define PENDIN	   0x00004000
+#define IEXTEN	   0x00008000
+#define EXTPROC	   0x00010000
+#define NOKERNINFO 0x00020000
 
 /* modem lines */
 #define TIOCM_LE	0x001

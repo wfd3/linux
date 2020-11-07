@@ -8,7 +8,7 @@
 /* Most things should be clean enough to redefine this at will, if care
    is taken to make libc match.  */
 
-#define _NSIG		64
+#define _NSIG		65
 
 #ifdef __i386__
 # define _NSIG_BPW	32

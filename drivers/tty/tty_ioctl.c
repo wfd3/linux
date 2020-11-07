@@ -842,6 +842,8 @@ int tty_mode_ioctl(struct tty_struct *tty, struct file *file,
 		if (get_user(arg, (unsigned int __user *) arg))
 			return -EFAULT;
 		return tty_change_softcar(real_tty, arg);
+	case TIOCSTAT:
+		return tty_status(real_tty);
 	default:
 		return -ENOIOCTLCMD;
 	}

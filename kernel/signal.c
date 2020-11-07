@@ -4605,6 +4605,9 @@ void __init signals_init(void)
 	sigaddset(&__KERNEL_COREDUMP_SIGNALS, SIGEMT);
 	sigaddset(&__KERNEL_SPECIFIC_SICODES_SIGNALS, SIGEMT);
 #endif
+#ifdef SIGINFO
+	sigaddset(&__KERNEL_IGNORE_SIGNALS, SIGINFO);
+#endif
 }
 
 #ifdef CONFIG_KGDB_KDB

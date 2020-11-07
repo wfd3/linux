@@ -67,6 +67,7 @@ struct ktermios {
 #define VWERASE 14
 #define VLNEXT 15
 #define VEOL2 16
+#define VSTATUS 17
 
 /* c_iflag bits */
 #define IGNBRK	0000001
@@ -173,22 +174,23 @@ struct ktermios {
 #define IBSHIFT	16		/* Shift from CBAUD to CIBAUD */
 
 /* c_lflag bits */
-#define ISIG	0000001
-#define ICANON	0000002
-#define XCASE	0000004
-#define ECHO	0000010
-#define ECHOE	0000020
-#define ECHOK	0000040
-#define ECHONL	0000100
-#define NOFLSH	0000200
-#define TOSTOP	0000400
-#define ECHOCTL	0001000
-#define ECHOPRT	0002000
-#define ECHOKE	0004000
-#define FLUSHO	0010000
-#define PENDIN	0040000
-#define IEXTEN	0100000
-#define EXTPROC	0200000
+#define ISIG	   0000001
+#define ICANON	   0000002
+#define XCASE	   0000004
+#define ECHO	   0000010
+#define ECHOE	   0000020
+#define ECHOK	   0000040
+#define ECHONL	   0000100
+#define NOFLSH	   0000200
+#define TOSTOP	   0000400
+#define ECHOCTL	   0001000
+#define ECHOPRT	   0002000
+#define ECHOKE	   0004000
+#define FLUSHO	   0010000
+#define PENDIN	   0040000
+#define IEXTEN	   0100000
+#define EXTPROC	   0200000
+#define NOKERNINFO 0400000
 
 /* tcflow() and TCXONC use these */
 #define	TCOOFF		0

@@ -1122,8 +1122,13 @@ static void isig(int sig, struct tty_struct *tty)
 {
 	struct n_tty_data *ldata = tty->disc_data;
 
+#ifdef SIGINFO
+	if (L_NOFLSH(tty) || sig == SIGINFO) {
+#else
 	if (L_NOFLSH(tty)) {
-		/* signal only */
+#endif
+		/* signal only, or we're handling VSTATUS/SIGINFO, if available, 
+		 * and tty_write_message() might have stuff in queue */
 		__isig(sig, tty);
 
 	} else { /* signal and flush */
@@ -1243,7 +1248,7 @@ n_tty_receive_signal_char(struct tty_struct *tty, int signal, unsigned char c)
 	isig(signal, tty);
 	if (I_IXON(tty))
 		start_tty(tty);
-	if (L_ECHO(tty)) {
+	if (L_ECHO(tty) && c != STATUS_CHAR(tty)) {
 		echo_char(c, tty);
 		commit_echoes(tty);
 	} else
@@ -1293,6 +1298,13 @@ n_tty_receive_char_special(struct tty_struct *tty, unsigned char c)
 			return 0;
 		} else if (c == SUSP_CHAR(tty)) {
 			n_tty_receive_signal_char(tty, SIGTSTP, c);
+			return 0;
+		} else if (c == STATUS_CHAR(tty)) {
+			if (!L_NOKERNINFO(tty))
+				tty_status(tty);
+#ifdef SIGINFO
+			n_tty_receive_signal_char(tty, SIGINFO, c);
+#endif
 			return 0;
 		}
 	}
@@ -1831,6 +1843,7 @@ static void n_tty_set_termios(struct tty_struct *tty, struct ktermios *old)
 			set_bit(EOF_CHAR(tty), ldata->char_map);
 			set_bit('\n', ldata->char_map);
 			set_bit(EOL_CHAR(tty), ldata->char_map);
+			set_bit(STATUS_CHAR(tty), ldata->char_map);
 			if (L_IEXTEN(tty)) {
 				set_bit(WERASE_CHAR(tty), ldata->char_map);
 				set_bit(LNEXT_CHAR(tty), ldata->char_map);

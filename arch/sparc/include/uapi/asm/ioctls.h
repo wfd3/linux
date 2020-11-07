@@ -124,7 +124,8 @@
 #define TIOCSERSETMULTI 0x545B /* Set multiport config */
 #define TIOCMIWAIT	0x545C /* Wait for change on serial input line(s) */
 #define TIOCGICOUNT	0x545D /* Read serial port inline interrupt counts */
-
+#define TIOCSTAT        0x545E  /* display process group stats on tty */
+  
 /* Kernel definitions */
 
 /* Used for packet mode */
