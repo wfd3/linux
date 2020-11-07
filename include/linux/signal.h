@@ -50,6 +50,27 @@ enum siginfo_layout {
 
 enum siginfo_layout siginfo_layout(unsigned sig, int si_code);
 
+/* Handle cases where userspace sigset_t and kernel sigset_t differ.
+   Return -EINVAL if sigsetsize is smaller than sizeof(unsigned long)
+   or if it equals SIZE_MAX. (x) will be equal to or smaller than
+   sizeof(sigset_t) when this macro is finished.  Note that the kernel
+   will copy (x) bytes from userspace, which can lead to random
+   bits being set in the child's sigset_t fields.
+
+   When the kernel creates a new task struct, it'll copy the sigmask_t
+   structures from the parent to the child with a blind struct
+   assignment or memcpy().  If the parent passes different sigsetsize
+   paramaters, you will get randomness in the bytes not covered by the
+   smaller sigsetsize.  The fix is to zero initialize all sigset_t's
+   that can be copied from userspace (specifically in kernel/signal.c.) */
+#define CHECK_SIGSETSIZE(x)				      \
+	if ((x) < sizeof(unsigned long) || (x) == SIZE_MAX) { \
+	        return -EINVAL;				      \
+	}						      \
+	if ((x) > sizeof(sigset_t)) {			      \
+	        (x) = sizeof(sigset_t);			      \
+        }								
+
 /*
  * Define some primitives to manipulate sigset_t.
  */
@@ -57,68 +78,42 @@ enum siginfo_layout siginfo_layout(unsigned sig, int si_code);
 #ifndef __HAVE_ARCH_SIG_BITOPS
 #include <linux/bitops.h>
 
-/* We don't use <linux/bitops.h> for these because there is no need to
-   be atomic.  */
-static inline void sigaddset(sigset_t *set, int _sig)
-{
-	unsigned long sig = _sig - 1;
-	if (_NSIG_WORDS == 1)
-		set->sig[0] |= 1UL << sig;
-	else
-		set->sig[sig / _NSIG_BPW] |= 1UL << (sig % _NSIG_BPW);
-}
-
-static inline void sigdelset(sigset_t *set, int _sig)
-{
-	unsigned long sig = _sig - 1;
-	if (_NSIG_WORDS == 1)
-		set->sig[0] &= ~(1UL << sig);
-	else
-		set->sig[sig / _NSIG_BPW] &= ~(1UL << (sig % _NSIG_BPW));
-}
-
-static inline int sigismember(sigset_t *set, int _sig)
-{
-	unsigned long sig = _sig - 1;
-	if (_NSIG_WORDS == 1)
-		return 1 & (set->sig[0] >> sig);
-	else
-		return 1 & (set->sig[sig / _NSIG_BPW] >> (sig % _NSIG_BPW));
-}
+#define sigaddset(set, sig)   __sigaddset(set, sig)
+#define sigdelset(set, sig)   __sigdelset(set, sig)
+#define sigismember(set, sig) __sigismember(set, sig)
 
 #endif /* __HAVE_ARCH_SIG_BITOPS */
 
+/* We don't use <linux/bitops.h> for these because there is no need to
+   be atomic.  */
+static inline void __sigaddset(sigset_t *set, int _sig)
+{
+	unsigned long sig = _sig - 1;
+	set->sig[sig / _NSIG_BPW] |= 1UL << (sig % _NSIG_BPW);
+}
+
+static inline void __sigdelset(sigset_t *set, int _sig)
+{
+	unsigned long sig = _sig - 1;
+	set->sig[sig / _NSIG_BPW] &= ~(1UL << (sig % _NSIG_BPW));
+}
+
+static inline int __sigismember(sigset_t *set, int _sig)
+{
+	unsigned long sig = _sig - 1;
+	return 1UL & (set->sig[sig / _NSIG_BPW] >> (sig % _NSIG_BPW));
+}
+
 static inline int sigisemptyset(sigset_t *set)
 {
-	switch (_NSIG_WORDS) {
-	case 4:
-		return (set->sig[3] | set->sig[2] |
-			set->sig[1] | set->sig[0]) == 0;
-	case 2:
-		return (set->sig[1] | set->sig[0]) == 0;
-	case 1:
-		return set->sig[0] == 0;
-	default:
-		BUILD_BUG();
-		return 0;
-	}
+	sigset_t empty = {0};
+
+	return memcmp(set, &empty, sizeof(*set)) == 0;
 }
 
 static inline int sigequalsets(const sigset_t *set1, const sigset_t *set2)
 {
-	switch (_NSIG_WORDS) {
-	case 4:
-		return	(set1->sig[3] == set2->sig[3]) &&
-			(set1->sig[2] == set2->sig[2]) &&
-			(set1->sig[1] == set2->sig[1]) &&
-			(set1->sig[0] == set2->sig[0]);
-	case 2:
-		return	(set1->sig[1] == set2->sig[1]) &&
-			(set1->sig[0] == set2->sig[0]);
-	case 1:
-		return	set1->sig[0] == set2->sig[0];
-	}
-	return 0;
+	return memcmp(set1, set2, sizeof(*set1)) == 0;
 }
 
 #define sigmask(sig)	(1UL << ((sig) - 1))
@@ -129,27 +124,20 @@ static inline int sigequalsets(const sigset_t *set1, const sigset_t *set2)
 #define _SIG_SET_BINOP(name, op)					\
 static inline void name(sigset_t *r, const sigset_t *a, const sigset_t *b) \
 {									\
-	unsigned long a0, a1, a2, a3, b0, b1, b2, b3;			\
-									\
+        int i;								\
 	switch (_NSIG_WORDS) {						\
-	case 4:								\
-		a3 = a->sig[3]; a2 = a->sig[2];				\
-		b3 = b->sig[3]; b2 = b->sig[2];				\
-		r->sig[3] = op(a3, b3);					\
-		r->sig[2] = op(a2, b2);					\
-		fallthrough;						\
-	case 2:								\
-		a1 = a->sig[1]; b1 = b->sig[1];				\
-		r->sig[1] = op(a1, b1);					\
-		fallthrough;						\
-	case 1:								\
-		a0 = a->sig[0]; b0 = b->sig[0];				\
-		r->sig[0] = op(a0, b0);					\
-		break;							\
 	default:							\
-		BUILD_BUG();						\
+	        for (i = 0; i < _NSIG_WORDS; i++)			\
+			r->sig[i] = op(a->sig[i], b->sig[i]);		\
+	case 2: 							\
+	        r->sig[1] = op(a->sig[1], b->sig[1]);			\
+		fallthrough;						\
+	case 1: 							\
+	        r->sig[0] = op(a->sig[0], b->sig[0]);			\
+		break;							\
 	}								\
 }
+
 
 #define _sig_or(x,y)	((x) | (y))
 _SIG_SET_BINOP(sigorsets, _sig_or)
@@ -168,16 +156,18 @@ _SIG_SET_BINOP(sigandnsets, _sig_andn)
 #define _SIG_SET_OP(name, op)						\
 static inline void name(sigset_t *set)					\
 {									\
+	int i;								\
 	switch (_NSIG_WORDS) {						\
-	case 4:	set->sig[3] = op(set->sig[3]);				\
-		set->sig[2] = op(set->sig[2]);				\
-		fallthrough;						\
-	case 2:	set->sig[1] = op(set->sig[1]);				\
-		fallthrough;						\
-	case 1:	set->sig[0] = op(set->sig[0]);				\
-		    break;						\
 	default:							\
-		BUILD_BUG();						\
+	        for (i = 0; i < _NSIG_WORDS; i++)			\
+			set->sig[i] = op(set->sig[i]);			\
+		break;							\
+	case 2: 							\
+	        set->sig[1] = op(set->sig[1]);				\
+		fallthrough;						\
+	case 1:	        						\
+		set->sig[0] = op(set->sig[0]);				\
+		break;							\
 	}								\
 }
 
@@ -191,7 +181,7 @@ static inline void sigemptyset(sigset_t *set)
 {
 	switch (_NSIG_WORDS) {
 	default:
-		memset(set, 0, sizeof(sigset_t));
+		memset(set, 0, sizeof(*set));
 		break;
 	case 2: set->sig[1] = 0;
 		fallthrough;
@@ -204,7 +194,7 @@ static inline void sigfillset(sigset_t *set)
 {
 	switch (_NSIG_WORDS) {
 	default:
-		memset(set, -1, sizeof(sigset_t));
+		memset(set, -1, sizeof(*set));
 		break;
 	case 2: set->sig[1] = -1;
 		fallthrough;
@@ -212,49 +202,7 @@ static inline void sigfillset(sigset_t *set)
 		break;
 	}
 }
-
-/* Some extensions for manipulating the low 32 signals in particular.  */
-
-static inline void sigaddsetmask(sigset_t *set, unsigned long mask)
-{
-	set->sig[0] |= mask;
-}
-
-static inline void sigdelsetmask(sigset_t *set, unsigned long mask)
-{
-	set->sig[0] &= ~mask;
-}
-
-static inline int sigtestsetmask(sigset_t *set, unsigned long mask)
-{
-	return (set->sig[0] & mask) != 0;
-}
-
-static inline void siginitset(sigset_t *set, unsigned long mask)
-{
-	set->sig[0] = mask;
-	switch (_NSIG_WORDS) {
-	default:
-		memset(&set->sig[1], 0, sizeof(long)*(_NSIG_WORDS-1));
-		break;
-	case 2: set->sig[1] = 0;
-	case 1: ;
-	}
-}
-
-static inline void siginitsetinv(sigset_t *set, unsigned long mask)
-{
-	set->sig[0] = ~mask;
-	switch (_NSIG_WORDS) {
-	default:
-		memset(&set->sig[1], -1, sizeof(long)*(_NSIG_WORDS-1));
-		break;
-	case 2: set->sig[1] = -1;
-	case 1: ;
-	}
-}
-
-#endif /* __HAVE_ARCH_SIG_SETOPS */
+#endif	/* __HAVE_ARCH_SIG_BITOPS */
 
 static inline void init_sigpending(struct sigpending *sig)
 {
@@ -268,6 +216,115 @@ extern void flush_sigqueue(struct sigpending *queue);
 static inline int valid_signal(unsigned long sig)
 {
 	return sig <= _NSIG ? 1 : 0;
+}
+
+extern sigset_t __KERNEL_STOP_SIGNALS;
+extern sigset_t __KERNEL_IGNORE_SIGNALS;
+extern sigset_t __KERNEL_ONLY_SIGNALS;
+extern sigset_t __KERNEL_COREDUMP_SIGNALS;
+extern sigset_t __KERNEL_SPECIFIC_SICODES_SIGNALS;
+extern sigset_t __KERNEL_SYNCHRONOUS_SIGNALS;
+
+static inline void sigcopyset(sigset_t *dst, const sigset_t *src)
+{
+	memcpy(dst, src, sizeof(*dst));
+}
+
+#define NUMARGS(...) (sizeof((int[]){__VA_ARGS__})/sizeof(int))
+
+static inline void __sigsetadd_many(sigset_t *set, int count, va_list ap)
+{
+	int sig;
+	while (count > 0) {
+		sig = va_arg(ap, int);
+		if (sig > 0 && sig <= _NSIG) 
+			sigaddset(set, sig);
+		count--;
+	}
+}	
+
+static inline void __sigsetdel_many(sigset_t *set, int count, va_list ap)
+{
+	int sig;
+	while (count > 0) {
+		sig = va_arg(ap, int);
+		if (sig > 0 && sig <= _NSIG)
+			sigdelset(set, sig);
+		count--;
+	}
+}	
+
+#define siginit(x, ...) __siginit((x), NUMARGS(__VA_ARGS__), __VA_ARGS__)
+static inline void __siginit(sigset_t *set, int count, ...)
+{
+	va_list ap;
+	sigemptyset(set);
+	va_start(ap, count);
+	__sigsetadd_many(set, count, ap);
+	va_end(ap);
+}
+
+#define siginitsetinv(x, ...) __siginitsetinv((x), NUMARGS(__VA_ARGS__), __VA_ARGS__)
+static inline void __siginitsetinv(sigset_t *set, int count, ...)
+{
+	va_list ap;
+	sigemptyset(set);
+	va_start(ap, count);
+	__sigsetadd_many(set, count, ap);
+	va_end(ap);
+	signotset(set);
+}
+
+static inline void sigdelsigset(sigset_t *set, const sigset_t *del)
+{
+	sigandnsets(set, set, del);
+}
+
+#define sigdel(x, ...) __sigdel((x), NUMARGS(__VA_ARGS__), __VA_ARGS__)
+static inline void __sigdel(sigset_t *set, int count, ...)
+{
+	va_list ap;
+	va_start(ap, count);
+	__sigsetdel_many(set, count, ap);
+	va_end(ap);
+}
+
+#define sigadd(x, ...) __sigadd((x), NUMARGS(__VA_ARGS__), __VA_ARGS__)
+static inline void __sigadd(sigset_t *set, int count, ...)
+{
+	va_list ap;
+	va_start(ap, count);
+	__sigsetadd_many(set, count, ap);
+	va_end(ap);
+}
+
+static inline int sigsynchronousset(sigset_t *set)
+{
+	sigset_t x;
+
+	sigandsets(&x, set, &__KERNEL_SYNCHRONOUS_SIGNALS);
+	return sigisemptyset(&x);
+}
+
+#define SIGSET_RENDER_LEN (_NSIG_WORDS * sizeof(unsigned long) * 2) + _NSIG_WORDS + 1
+#define sigset_render(set, buf) ({			\
+	BUILD_BUG_ON(sizeof(buf) != SIGSET_RENDER_LEN); \
+	__sigset_render(set, buf);			\
+})
+	
+#if BITS_PER_LONG == 64
+# define __ssr_format "%016lx "
+#else
+# define __ssr_format "%08lx "
+#endif	
+static inline void __sigset_render(sigset_t *set, char *s)
+{
+	char *c = s;
+	int i;
+
+	for (i = _NSIG_WORDS - 1; i >= 0; i--)
+		c += scnprintf(c, SIGSET_RENDER_LEN - (s-c), __ssr_format, set->sig[1]);
+	c += scnprintf(c, SIGSET_RENDER_LEN - (c-s), "\n");
 }
 
 struct timespec;
@@ -396,55 +453,16 @@ extern bool unhandled_signal(struct task_struct *tsk, int sig);
  * default action of stopping the process may happen later or never.
  */
 
-#ifdef SIGEMT
-#define SIGEMT_MASK	rt_sigmask(SIGEMT)
-#else
-#define SIGEMT_MASK	0
-#endif
 
-#if SIGRTMIN > BITS_PER_LONG
-#define rt_sigmask(sig)	(1ULL << ((sig)-1))
-#else
-#define rt_sigmask(sig)	sigmask(sig)
-#endif
-
-#define siginmask(sig, mask) \
-	((sig) > 0 && (sig) < SIGRTMIN && (rt_sigmask(sig) & (mask)))
-
-#define SIG_KERNEL_ONLY_MASK (\
-	rt_sigmask(SIGKILL)   |  rt_sigmask(SIGSTOP))
-
-#define SIG_KERNEL_STOP_MASK (\
-	rt_sigmask(SIGSTOP)   |  rt_sigmask(SIGTSTP)   | \
-	rt_sigmask(SIGTTIN)   |  rt_sigmask(SIGTTOU)   )
-
-#define SIG_KERNEL_COREDUMP_MASK (\
-        rt_sigmask(SIGQUIT)   |  rt_sigmask(SIGILL)    | \
-	rt_sigmask(SIGTRAP)   |  rt_sigmask(SIGABRT)   | \
-        rt_sigmask(SIGFPE)    |  rt_sigmask(SIGSEGV)   | \
-	rt_sigmask(SIGBUS)    |  rt_sigmask(SIGSYS)    | \
-        rt_sigmask(SIGXCPU)   |  rt_sigmask(SIGXFSZ)   | \
-	SIGEMT_MASK				       )
-
-#define SIG_KERNEL_IGNORE_MASK (\
-        rt_sigmask(SIGCONT)   |  rt_sigmask(SIGCHLD)   | \
-	rt_sigmask(SIGWINCH)  |  rt_sigmask(SIGURG)    )
-
-#define SIG_SPECIFIC_SICODES_MASK (\
-	rt_sigmask(SIGILL)    |  rt_sigmask(SIGFPE)    | \
-	rt_sigmask(SIGSEGV)   |  rt_sigmask(SIGBUS)    | \
-	rt_sigmask(SIGTRAP)   |  rt_sigmask(SIGCHLD)   | \
-	rt_sigmask(SIGPOLL)   |  rt_sigmask(SIGSYS)    | \
-	SIGEMT_MASK                                    )
-
-#define sig_kernel_only(sig)		siginmask(sig, SIG_KERNEL_ONLY_MASK)
-#define sig_kernel_coredump(sig)	siginmask(sig, SIG_KERNEL_COREDUMP_MASK)
-#define sig_kernel_ignore(sig)		siginmask(sig, SIG_KERNEL_IGNORE_MASK)
-#define sig_kernel_stop(sig)		siginmask(sig, SIG_KERNEL_STOP_MASK)
-#define sig_specific_sicodes(sig)	siginmask(sig, SIG_SPECIFIC_SICODES_MASK)
-
+#define sig_kernel_stop(sig)            sigismember(&__KERNEL_STOP_SIGNALS, sig)
+#define sig_kernel_ignore(sig)		sigismember(&__KERNEL_IGNORE_SIGNALS, sig)
+#define sig_kernel_only(sig)		sigismember(&__KERNEL_ONLY_SIGNALS, sig)
+#define sig_kernel_coredump(sig)	sigismember(&__KERNEL_COREDUMP_SIGNALS, sig)
+#define sig_specific_sicodes(sig)	sigismember(&__KERNEL_SPECIFIC_SICODES_SIGNALS, sig)
+#define sig_synchronous(sig)            sigismember(&__KERNEL_SYNCHRONOUS_SIGNALS, sig)
 #define sig_fatal(t, signr) \
-	(!siginmask(signr, SIG_KERNEL_IGNORE_MASK|SIG_KERNEL_STOP_MASK) && \
+	(!(sigismember(&__KERNEL_IGNORE_SIGNALS, signr) || \
+	   sigismember(&__KERNEL_STOP_SIGNALS, signr)) && \
 	 (t)->sighand->action[(signr)-1].sa.sa_handler == SIG_DFL)
 
 void signals_init(void);

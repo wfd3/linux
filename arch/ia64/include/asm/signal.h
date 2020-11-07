@@ -14,7 +14,9 @@
 
 #define _NSIG		64
 #define _NSIG_BPW	64
-#define _NSIG_WORDS	(_NSIG / _NSIG_BPW)
+/* Round up when neccessary */
+#define _NSIG_WORDS	((_NSIG + _NSIG_BPW - 1) / _NSIG_BPW)
+
 
 # ifndef __ASSEMBLY__
 

@@ -29,13 +29,28 @@
 #ifdef __ARCH_WANT_SYS_SIGPROCMASK
 
 /*
- * sys_sigprocmask SIG_SETMASK sets the first (compat) word of the
- * blocked set of signals to the supplied signal set
+ * These function set the first (compat) word of the kernel's sigset_t
  */
 static inline void compat_sig_setmask(sigset_t *blocked, compat_sigset_word set)
 {
 	memcpy(blocked->sig, &set, sizeof(set));
 }
+
+static inline void compat_sigaddsetmask(sigset_t *set, unsigned long mask)
+{
+	set->sig[0] |= mask;
+}
+
+static inline void compat_sigdelsetmask(sigset_t *set, unsigned long mask)
+{
+	set->sig[0] &= ~mask;
+}
+
+static inline int compat_sigtestsetmask(sigset_t *set, unsigned long mask)
+{
+	return (set->sig[0] & mask) != 0;
+}
+
 
 COMPAT_SYSCALL_DEFINE3(sigprocmask, int, how,
 		       compat_old_sigset_t __user *, nset,
@@ -55,10 +70,10 @@ COMPAT_SYSCALL_DEFINE3(sigprocmask, int, how,
 
 		switch (how) {
 		case SIG_BLOCK:
-			sigaddsetmask(&new_blocked, new_set);
+			compat_sigaddsetmask(&new_blocked, new_set);
 			break;
 		case SIG_UNBLOCK:
-			sigdelsetmask(&new_blocked, new_set);
+			compat_sigdelsetmask(&new_blocked, new_set);
 			break;
 		case SIG_SETMASK:
 			compat_sig_setmask(&new_blocked, new_set);

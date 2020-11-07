@@ -63,6 +63,12 @@
 static struct kmem_cache *sigqueue_cachep;
 
 int print_fatal_signals __read_mostly;
+sigset_t __KERNEL_STOP_SIGNALS;
+sigset_t __KERNEL_IGNORE_SIGNALS;
+sigset_t __KERNEL_ONLY_SIGNALS;
+sigset_t __KERNEL_COREDUMP_SIGNALS;
+sigset_t __KERNEL_SPECIFIC_SICODES_SIGNALS;
+sigset_t __KERNEL_SYNCHRONOUS_SIGNALS;
 
 static void __user *sig_handler(struct task_struct *t, int sig)
 {
@@ -207,17 +213,15 @@ void calculate_sigpending(void)
 
 int next_signal(struct sigpending *pending, sigset_t *mask)
 {
-	unsigned long i, *s, *m, x;
+  	unsigned long i, x;
 	int sig = 0;
-
-	s = pending->signal.sig;
-	m = mask->sig;
+	sigset_t *pend = &pending->signal;
 
 	/*
 	 * Handle the first word specially: it contains the
 	 * synchronous signals that need to be dequeued first.
 	 */
-	x = *s &~ *m;
+	x = pend->sig[0] &~ mask->sig[0];
 	if (x) {
 		if (x & SYNCHRONOUS_MASK)
 			x &= SYNCHRONOUS_MASK;
@@ -225,26 +229,11 @@ int next_signal(struct sigpending *pending, sigset_t *mask)
 		return sig;
 	}
 
-	switch (_NSIG_WORDS) {
-	default:
-		for (i = 1; i < _NSIG_WORDS; ++i) {
-			x = *++s &~ *++m;
-			if (!x)
-				continue;
-			sig = ffz(~x) + i*_NSIG_BPW + 1;
-			break;
-		}
-		break;
-
-	case 2:
-		x = s[1] &~ m[1];
+	for (i = 1; i < _NSIG_WORDS; ++i) {
+		x = pend->sig[i] &~ mask->sig[i];
 		if (!x)
-			break;
-		sig = ffz(~x) + _NSIG_BPW + 1;
-		break;
-
-	case 1:
-		/* Nothing to do */
+			continue;
+		sig = ffz(~x) + i*_NSIG_BPW + 1;
 		break;
 	}
 
@@ -708,20 +697,21 @@ static int dequeue_synchronous_signal(kernel_siginfo_t *info)
 	struct task_struct *tsk = current;
 	struct sigpending *pending = &tsk->pending;
 	struct sigqueue *q, *sync = NULL;
+	sigset_t sset;
 
 	/*
 	 * Might a synchronous signal be in the queue?
 	 */
-	if (!((pending->signal.sig[0] & ~tsk->blocked.sig[0]) & SYNCHRONOUS_MASK))
+	sigandnsets(&sset, &pending->signal, &tsk->blocked);
+	if (!sigsynchronousset(&sset)) 
 		return 0;
 
 	/*
 	 * Return the first synchronous signal in the queue.
 	 */
 	list_for_each_entry(q, &pending->list, list) {
-		/* Synchronous signals have a positive si_code */
-		if ((q->info.si_code > SI_USER) &&
-		    (sigmask(q->info.si_signo) & SYNCHRONOUS_MASK)) {
+		/* Synchronous signals have a postive si_code */
+		if ((q->info.si_code > SI_USER) && sig_synchronous(q->info.si_signo)) {
 			sync = q;
 			goto next;
 		}
@@ -912,7 +902,7 @@ static bool prepare_signal(int sig, struct task_struct *p, bool force)
 		/*
 		 * This is a stop signal.  Remove SIGCONT from all queues.
 		 */
-		siginitset(&flush, sigmask(SIGCONT));
+		siginit(&flush, SIGCONT);
 		flush_sigqueue_mask(&flush, &signal->shared_pending);
 		for_each_thread(p, t)
 			flush_sigqueue_mask(&flush, &t->pending);
@@ -921,10 +911,9 @@ static bool prepare_signal(int sig, struct task_struct *p, bool force)
 		/*
 		 * Remove all stop signals from all queues, wake all threads.
 		 */
-		siginitset(&flush, SIG_KERNEL_STOP_MASK);
-		flush_sigqueue_mask(&flush, &signal->shared_pending);
+		flush_sigqueue_mask(&__KERNEL_STOP_SIGNALS, &signal->shared_pending);
 		for_each_thread(p, t) {
-			flush_sigqueue_mask(&flush, &t->pending);
+			flush_sigqueue_mask(&__KERNEL_STOP_SIGNALS, &t->pending);
 			task_clear_jobctl_pending(t, JOBCTL_STOP_PENDING);
 			if (likely(!(t->ptrace & PT_SEIZED)))
 				wake_up_state(t, __TASK_STOPPED);
@@ -1107,7 +1096,7 @@ static int __send_signal(int sig, struct kernel_siginfo *info, struct task_struc
 	 * make sure at least one signal gets delivered and don't
 	 * pass on the info struct.
 	 */
-	if (sig < SIGRTMIN)
+	if (sig < SIGRTMIN || sig > SIGRTMAX)
 		override_rlimit = (is_si_special(info) || info->si_code >= 0);
 	else
 		override_rlimit = 0;
@@ -1142,7 +1131,8 @@ static int __send_signal(int sig, struct kernel_siginfo *info, struct task_struc
 			break;
 		}
 	} else if (!is_si_special(info) &&
-		   sig >= SIGRTMIN && info->si_code != SI_USER) {
+		   sig >= SIGRTMIN && sig <= SIGRTMAX &&
+		   info->si_code != SI_USER) {
 		/*
 		 * Queue overflow, abort.  We may abort if the
 		 * signal was rt and sent by user using something
@@ -1170,7 +1160,7 @@ out_set:
 			sigset_t *signal = &delayed->signal;
 			/* Can't queue both a stop and a continue signal */
 			if (sig == SIGCONT)
-				sigdelsetmask(signal, SIG_KERNEL_STOP_MASK);
+				sigandnsets(signal, signal, &__KERNEL_STOP_SIGNALS);
 			else if (sig_kernel_stop(sig))
 				sigdelset(signal, SIGCONT);
 			sigaddset(signal, sig);
@@ -2919,7 +2909,7 @@ static void __set_task_blocked(struct task_struct *tsk, const sigset_t *newset)
  */
 void set_current_blocked(sigset_t *newset)
 {
-	sigdelsetmask(newset, sigmask(SIGKILL) | sigmask(SIGSTOP));
+	sigdel(newset, SIGKILL, SIGSTOP);
 	__set_current_blocked(newset);
 }
 
@@ -2986,13 +2976,12 @@ EXPORT_SYMBOL(sigprocmask);
  */
 int set_user_sigmask(const sigset_t __user *umask, size_t sigsetsize)
 {
-	sigset_t kmask;
+	sigset_t kmask = {0};
 
 	if (!umask)
 		return 0;
-	if (sigsetsize != sizeof(sigset_t))
-		return -EINVAL;
-	if (copy_from_user(&kmask, umask, sizeof(sigset_t)))
+	CHECK_SIGSETSIZE(sigsetsize);
+	if (copy_from_user(&kmask, umask, sigsetsize))
 		return -EFAULT;
 
 	set_restore_sigmask();
@@ -3033,19 +3022,16 @@ int set_compat_user_sigmask(const compat_sigset_t __user *umask,
 SYSCALL_DEFINE4(rt_sigprocmask, int, how, sigset_t __user *, nset,
 		sigset_t __user *, oset, size_t, sigsetsize)
 {
-	sigset_t old_set, new_set;
+	sigset_t old_set = {0}, new_set = {0};
 	int error;
 
-	/* XXX: Don't preclude handling different sized sigset_t's.  */
-	if (sigsetsize != sizeof(sigset_t))
-		return -EINVAL;
-
+	CHECK_SIGSETSIZE(sigsetsize);
 	old_set = current->blocked;
 
 	if (nset) {
-		if (copy_from_user(&new_set, nset, sizeof(sigset_t)))
+		if (copy_from_user(&new_set, nset, sigsetsize))
 			return -EFAULT;
-		sigdelsetmask(&new_set, sigmask(SIGKILL)|sigmask(SIGSTOP));
+		sigdel(&new_set, SIGKILL, SIGSTOP);
 
 		error = sigprocmask(how, &new_set, NULL);
 		if (error)
@@ -3053,7 +3039,7 @@ SYSCALL_DEFINE4(rt_sigprocmask, int, how, sigset_t __user *, nset,
 	}
 
 	if (oset) {
-		if (copy_to_user(oset, &old_set, sizeof(sigset_t)))
+		if (copy_to_user(oset, &old_set, sigsetsize))
 			return -EFAULT;
 	}
 
@@ -3075,7 +3061,7 @@ COMPAT_SYSCALL_DEFINE4(rt_sigprocmask, int, how, compat_sigset_t __user *, nset,
 		int error;
 		if (get_compat_sigset(&new_set, nset))
 			return -EFAULT;
-		sigdelsetmask(&new_set, sigmask(SIGKILL)|sigmask(SIGSTOP));
+		sigdel(&new_set, SIGKILL, SIGSTOP);
 
 		error = sigprocmask(how, &new_set, NULL);
 		if (error)
@@ -3106,9 +3092,8 @@ SYSCALL_DEFINE2(rt_sigpending, sigset_t __user *, uset, size_t, sigsetsize)
 {
 	sigset_t set;
 
-	if (sigsetsize > sizeof(*uset))
-		return -EINVAL;
-
+	CHECK_SIGSETSIZE(sigsetsize);
+	
 	do_sigpending(&set);
 
 	if (copy_to_user(uset, &set, sigsetsize))
@@ -3470,7 +3455,7 @@ static int do_sigtimedwait(const sigset_t *which, kernel_siginfo_t *info,
 	/*
 	 * Invert the set of allowed signals to get those we want to block.
 	 */
-	sigdelsetmask(&mask, sigmask(SIGKILL) | sigmask(SIGSTOP));
+	sigdel(&mask, SIGKILL, SIGSTOP);
 	signotset(&mask);
 
 	spin_lock_irq(&tsk->sighand->siglock);
@@ -3515,16 +3500,14 @@ SYSCALL_DEFINE4(rt_sigtimedwait, const sigset_t __user *, uthese,
 		const struct __kernel_timespec __user *, uts,
 		size_t, sigsetsize)
 {
-	sigset_t these;
+	sigset_t these = {0};
 	struct timespec64 ts;
 	kernel_siginfo_t info;
 	int ret;
 
-	/* XXX: Don't preclude handling different sized sigset_t's.  */
-	if (sigsetsize != sizeof(sigset_t))
-		return -EINVAL;
+	CHECK_SIGSETSIZE(sigsetsize);
 
-	if (copy_from_user(&these, uthese, sizeof(these)))
+	if (copy_from_user(&these, uthese, sigsetsize))
 		return -EFAULT;
 
 	if (uts) {
@@ -3987,8 +3970,7 @@ int do_sigaction(int sig, struct k_sigaction *act, struct k_sigaction *oact)
 	sigaction_compat_abi(act, oact);
 
 	if (act) {
-		sigdelsetmask(&act->sa.sa_mask,
-			      sigmask(SIGKILL) | sigmask(SIGSTOP));
+		sigdel(&act->sa.sa_mask, SIGKILL, SIGSTOP);
 		*k = *act;
 		/*
 		 * POSIX 3.3.1.3:
@@ -4216,10 +4198,10 @@ SYSCALL_DEFINE3(sigprocmask, int, how, old_sigset_t __user *, nset,
 
 		switch (how) {
 		case SIG_BLOCK:
-			sigaddsetmask(&new_blocked, new_set);
+			new_blocked.sig[0] |= new_set;
 			break;
 		case SIG_UNBLOCK:
-			sigdelsetmask(&new_blocked, new_set);
+			new_blocked.sig[0] &= ~new_set;
 			break;
 		case SIG_SETMASK:
 			new_blocked.sig[0] = new_set;
@@ -4253,21 +4235,27 @@ SYSCALL_DEFINE4(rt_sigaction, int, sig,
 		struct sigaction __user *, oact,
 		size_t, sigsetsize)
 {
-	struct k_sigaction new_sa, old_sa;
+	struct k_sigaction new_sa = {0}, old_sa = {0};
 	int ret;
+	unsigned long len;
+	size_t orig_size;
 
-	/* XXX: Don't preclude handling different sized sigset_t's.  */
-	if (sigsetsize != sizeof(sigset_t))
-		return -EINVAL;
+	/* To handle cases where userspace sigset_t is smaller than
+	 * the kernel's, we need to figure out the exact active length
+	 * of userspace sigset_t and copy exactly those bytes plus the
+	 * size of sigaction header into k_sigaction, */
+	orig_size = sigsetsize;
+	CHECK_SIGSETSIZE(sigsetsize);
+	len = sizeof(new_sa.sa) - sizeof(new_sa.sa.sa_mask) + sigsetsize;
 
-	if (act && copy_from_user(&new_sa.sa, act, sizeof(new_sa.sa)))
+	if (act && copy_from_user(&new_sa.sa, act, len))
 		return -EFAULT;
 
 	ret = do_sigaction(sig, act ? &new_sa : NULL, oact ? &old_sa : NULL);
 	if (ret)
 		return ret;
 
-	if (oact && copy_to_user(oact, &old_sa.sa, sizeof(old_sa.sa)))
+	if (oact && copy_to_user(oact, &old_sa.sa, len))
 		return -EFAULT;
 
 	return 0;
@@ -4338,7 +4326,7 @@ SYSCALL_DEFINE3(sigaction, int, sig,
 #ifdef __ARCH_HAS_KA_RESTORER
 		new_ka.ka_restorer = NULL;
 #endif
-		siginitset(&new_ka.sa.sa_mask, mask);
+		siginit(&new_ka.sa.sa_mask, mask);
 	}
 
 	ret = do_sigaction(sig, act ? &new_ka : NULL, oact ? &old_ka : NULL);
@@ -4378,7 +4366,7 @@ COMPAT_SYSCALL_DEFINE3(sigaction, int, sig,
 #endif
 		new_ka.sa.sa_handler = compat_ptr(handler);
 		new_ka.sa.sa_restorer = compat_ptr(restorer);
-		siginitset(&new_ka.sa.sa_mask, mask);
+		siginit(&new_ka.sa.sa_mask, mask);
 	}
 
 	ret = do_sigaction(sig, act ? &new_ka : NULL, oact ? &old_ka : NULL);
@@ -4413,7 +4401,7 @@ SYSCALL_DEFINE1(ssetmask, int, newmask)
 	int old = current->blocked.sig[0];
 	sigset_t newset;
 
-	siginitset(&newset, newmask);
+	siginit(&newset, newmask);
 	set_current_blocked(&newset);
 
 	return old;
@@ -4473,13 +4461,10 @@ static int sigsuspend(sigset_t *set)
  */
 SYSCALL_DEFINE2(rt_sigsuspend, sigset_t __user *, unewset, size_t, sigsetsize)
 {
-	sigset_t newset;
+	sigset_t newset = {0};
 
-	/* XXX: Don't preclude handling different sized sigset_t's.  */
-	if (sigsetsize != sizeof(sigset_t))
-		return -EINVAL;
-
-	if (copy_from_user(&newset, unewset, sizeof(newset)))
+	CHECK_SIGSETSIZE(sigsetsize);
+	if (copy_from_user(&newset, unewset, sigsetsize))
 		return -EFAULT;
 	return sigsuspend(&newset);
 }
@@ -4503,7 +4488,7 @@ COMPAT_SYSCALL_DEFINE2(rt_sigsuspend, compat_sigset_t __user *, unewset, compat_
 SYSCALL_DEFINE1(sigsuspend, old_sigset_t, mask)
 {
 	sigset_t blocked;
-	siginitset(&blocked, mask);
+	blocked.sig[0] = mask;
 	return sigsuspend(&blocked);
 }
 #endif
@@ -4511,7 +4496,7 @@ SYSCALL_DEFINE1(sigsuspend, old_sigset_t, mask)
 SYSCALL_DEFINE3(sigsuspend, int, unused1, int, unused2, old_sigset_t, mask)
 {
 	sigset_t blocked;
-	siginitset(&blocked, mask);
+	blocked.sig[0] = mask;
 	return sigsuspend(&blocked);
 }
 #endif
@@ -4595,6 +4580,31 @@ void __init signals_init(void)
 	siginfo_buildtime_checks();
 
 	sigqueue_cachep = KMEM_CACHE(sigqueue, SLAB_PANIC);
+
+	siginit(&__KERNEL_STOP_SIGNALS,
+		SIGSTOP, SIGTSTP, SIGTTIN, SIGTTOU);
+
+	siginit(&__KERNEL_IGNORE_SIGNALS,
+		SIGCONT, SIGCHLD, SIGWINCH, SIGURG);
+
+	siginit(&__KERNEL_ONLY_SIGNALS,
+		SIGKILL, SIGSTOP);
+
+	siginit(&__KERNEL_COREDUMP_SIGNALS,
+		SIGQUIT, SIGILL, SIGTRAP, SIGABRT, SIGFPE, SIGSEGV, SIGBUS,
+		SIGSYS, SIGXCPU, SIGXFSZ);
+
+	siginit(&__KERNEL_SPECIFIC_SICODES_SIGNALS,
+		SIGILL, SIGFPE, SIGSEGV, SIGBUS, SIGTRAP, SIGCHLD, SIGPOLL,
+		SIGSYS);
+
+	siginit(&__KERNEL_SYNCHRONOUS_SIGNALS,
+		SIGSEGV, SIGBUS, SIGILL, SIGTRAP, SIGFPE, SIGSYS);
+
+#ifdef SIGEMT
+	sigaddset(&__KERNEL_COREDUMP_SIGNALS, SIGEMT);
+	sigaddset(&__KERNEL_SPECIFIC_SICODES_SIGNALS, SIGEMT);
+#endif
 }
 
 #ifdef CONFIG_KGDB_KDB

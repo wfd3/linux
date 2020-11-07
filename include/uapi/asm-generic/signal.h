@@ -6,7 +6,7 @@
 
 #define _NSIG		64
 #define _NSIG_BPW	__BITS_PER_LONG
-#define _NSIG_WORDS	(_NSIG / _NSIG_BPW)
+#define _NSIG_WORDS     ((_NSIG + _NSIG_BPW + 1) / _NSIG_BPW)
 
 #define SIGHUP		 1
 #define SIGINT		 2
@@ -49,7 +49,7 @@
 /* These should not be considered constants from userland.  */
 #define SIGRTMIN	32
 #ifndef SIGRTMAX
-#define SIGRTMAX	_NSIG
+#define SIGRTMAX	64
 #endif
 
 /*

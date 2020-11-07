@@ -271,7 +271,7 @@ static int do_signalfd4(int ufd, sigset_t *mask, int flags)
 	if (flags & ~(SFD_CLOEXEC | SFD_NONBLOCK))
 		return -EINVAL;
 
-	sigdelsetmask(mask, sigmask(SIGKILL) | sigmask(SIGSTOP));
+	sigdel(mask, SIGKILL, SIGSTOP);
 	signotset(mask);
 
 	if (ufd == -1) {
@@ -312,11 +312,10 @@ static int do_signalfd4(int ufd, sigset_t *mask, int flags)
 SYSCALL_DEFINE4(signalfd4, int, ufd, sigset_t __user *, user_mask,
 		size_t, sizemask, int, flags)
 {
-	sigset_t mask;
+	sigset_t mask = {0};
 
-	if (sizemask != sizeof(sigset_t))
-		return -EINVAL;
-	if (copy_from_user(&mask, user_mask, sizeof(mask)))
+	CHECK_SIGSETSIZE(sizemask);
+	if (copy_from_user(&mask, user_mask, sizemask))
 		return -EFAULT;
 	return do_signalfd4(ufd, &mask, flags);
 }
@@ -324,11 +323,10 @@ SYSCALL_DEFINE4(signalfd4, int, ufd, sigset_t __user *, user_mask,
 SYSCALL_DEFINE3(signalfd, int, ufd, sigset_t __user *, user_mask,
 		size_t, sizemask)
 {
-	sigset_t mask;
+	sigset_t mask = {0};
 
-	if (sizemask != sizeof(sigset_t))
-		return -EINVAL;
-	if (copy_from_user(&mask, user_mask, sizeof(mask)))
+	CHECK_SIGSETSIZE(sizemask);
+	if (copy_from_user(&mask, user_mask, sizemask))
 		return -EFAULT;
 	return do_signalfd4(ufd, &mask, 0);
 }

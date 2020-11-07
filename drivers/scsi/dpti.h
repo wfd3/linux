@@ -96,8 +96,6 @@ static int adpt_device_reset(struct scsi_cmnd* cmd);
 #define PINFO(fmt, args...) printk(KERN_INFO fmt, ##args)
 #define PCRIT(fmt, args...) printk(KERN_CRIT fmt, ##args)
 
-#define SHUTDOWN_SIGS	(sigmask(SIGKILL)|sigmask(SIGINT)|sigmask(SIGTERM))
-
 // Command timeouts
 #define FOREVER			(0)
 #define TMOUT_INQUIRY 		(20)
