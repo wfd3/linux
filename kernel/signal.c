@@ -134,24 +134,24 @@ static inline bool has_pending_signals(sigset_t *signal, sigset_t *blocked)
 	unsigned long ready;
 	long i;
 
+	ready = 0;
+
 	switch (_NSIG_WORDS) {
 	default:
-		for (i = _NSIG_WORDS, ready = 0; --i >= 0 ;)
+		for (i = _NSIG_WORDS; --i >= 0 ;)
 			ready |= signal->sig[i] &~ blocked->sig[i];
 		break;
 
-	case 4: ready  = signal->sig[3] &~ blocked->sig[3];
+	case 4: ready |= signal->sig[3] &~ blocked->sig[3];
 		ready |= signal->sig[2] &~ blocked->sig[2];
-		ready |= signal->sig[1] &~ blocked->sig[1];
-		ready |= signal->sig[0] &~ blocked->sig[0];
-		break;
+		fallthrough;
 
-	case 2: ready  = signal->sig[1] &~ blocked->sig[1];
-		ready |= signal->sig[0] &~ blocked->sig[0];
-		break;
+	case 2: ready |= signal->sig[1] &~ blocked->sig[1];
+		fallthrough;
 
-	case 1: ready  = signal->sig[0] &~ blocked->sig[0];
+	case 1: ready |= signal->sig[0] &~ blocked->sig[0];
 	}
+	
 	return ready !=	0;
 }
 
@@ -218,22 +218,16 @@ int next_signal(struct sigpending *pending, sigset_t *mask)
 	int sig = 0;
 	sigset_t *pend = &pending->signal;
 
-	/*
-	 * Handle the first word specially: it contains the
-	 * synchronous signals that need to be dequeued first.
-	 */
-	x = pend->sig[0] &~ mask->sig[0];
-	if (x) {
-		if (x & SYNCHRONOUS_MASK)
-			x &= SYNCHRONOUS_MASK;
-		sig = ffz(~x) + 1;
-		return sig;
-	}
-
-	for (i = 1; i < _NSIG_WORDS; ++i) {
+	for (i = 0; i < _NSIG_WORDS; i++) {
 		x = pend->sig[i] &~ mask->sig[i];
-		if (!x)
+		if (x == 0)
 			continue;
+
+		/* Handle the first word specially: it contains the
+		 * synchronous signals that need to be dequeued first. */
+		if (i == 0 && x & SYNCHRONOUS_MASK) {
+			x &= SYNCHRONOUS_MASK;
+		}
 		sig = ffz(~x) + i*_NSIG_BPW + 1;
 		break;
 	}
