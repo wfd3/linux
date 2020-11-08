@@ -32,8 +32,6 @@
 
 #define DEBUG_SIG 0
 
-#define _BLOCKABLE (~(sigmask(SIGKILL) | sigmask(SIGSTOP)))
-
 asmlinkage void ret_from_sys_call(void);
 
 /*

@@ -64,7 +64,7 @@ COMPAT_SYSCALL_DEFINE3(sigprocmask, int, how,
 	if (nset) {
 		if (get_user(new_set, nset))
 			return -EFAULT;
-		new_set &= ~(sigmask(SIGKILL) | sigmask(SIGSTOP));
+		new_set &= ~(1UL << (SIGKILL - 1) | 1UL << (SIGSTOP - 1));
 
 		new_blocked = current->blocked;
 

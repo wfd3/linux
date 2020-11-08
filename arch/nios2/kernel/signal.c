@@ -20,8 +20,6 @@
 #include <asm/ucontext.h>
 #include <asm/cacheflush.h>
 
-#define _BLOCKABLE (~(sigmask(SIGKILL) | sigmask(SIGSTOP)))
-
 /*
  * Do a signal return; undo the signal stack.
  *

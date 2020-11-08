@@ -207,9 +207,10 @@ void calculate_sigpending(void)
 
 /* Given the mask, find the first available signal that should be serviced. */
 
+#define _sigmask(sig)	(1UL << ((sig) - 1))
 #define SYNCHRONOUS_MASK \
-	(sigmask(SIGSEGV) | sigmask(SIGBUS) | sigmask(SIGILL) | \
-	 sigmask(SIGTRAP) | sigmask(SIGFPE) | sigmask(SIGSYS))
+	(_sigmask(SIGSEGV) | _sigmask(SIGBUS) | _sigmask(SIGILL) | \
+	 _sigmask(SIGTRAP) | _sigmask(SIGFPE) | _sigmask(SIGSYS))
 
 int next_signal(struct sigpending *pending, sigset_t *mask)
 {

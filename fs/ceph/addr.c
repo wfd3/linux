@@ -1503,7 +1503,7 @@ const struct address_space_operations ceph_aops = {
 static void ceph_block_sigs(sigset_t *oldset)
 {
 	sigset_t mask;
-	siginitsetinv(&mask, sigmask(SIGKILL));
+	siginitsetinv(&mask, SIGKILL);
 	sigprocmask(SIG_BLOCK, &mask, oldset);
 }
 

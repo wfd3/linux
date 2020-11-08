@@ -45,7 +45,6 @@
 
 #define NLMDBG_FACILITY		NLMDBG_SVC
 #define LOCKD_BUFSIZE		(1024 + NLMSVC_XDRSIZE)
-#define ALLOWED_SIGS		(sigmask(SIGKILL))
 
 static struct svc_program	nlmsvc_program;
 

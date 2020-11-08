@@ -116,8 +116,6 @@ static inline int sigequalsets(const sigset_t *set1, const sigset_t *set2)
 	return memcmp(set1, set2, sizeof(*set1)) == 0;
 }
 
-#define sigmask(sig)	(1UL << ((sig) - 1))
-
 #ifndef __HAVE_ARCH_SIG_SETOPS
 #include <linux/string.h>
 
@@ -126,14 +124,15 @@ static inline void name(sigset_t *r, const sigset_t *a, const sigset_t *b) \
 {									\
         int i;								\
 	switch (_NSIG_WORDS) {						\
-	default:							\
-	        for (i = 0; i < _NSIG_WORDS; i++)			\
-			r->sig[i] = op(a->sig[i], b->sig[i]);		\
 	case 2: 							\
 	        r->sig[1] = op(a->sig[1], b->sig[1]);			\
 		fallthrough;						\
 	case 1: 							\
 	        r->sig[0] = op(a->sig[0], b->sig[0]);			\
+		break;							\
+	default:							\
+	        for (i = 0; i < _NSIG_WORDS; i++)			\
+			r->sig[i] = op(a->sig[i], b->sig[i]);		\
 		break;							\
 	}								\
 }
@@ -158,15 +157,15 @@ static inline void name(sigset_t *set)					\
 {									\
 	int i;								\
 	switch (_NSIG_WORDS) {						\
-	default:							\
-	        for (i = 0; i < _NSIG_WORDS; i++)			\
-			set->sig[i] = op(set->sig[i]);			\
-		break;							\
 	case 2: 							\
 	        set->sig[1] = op(set->sig[1]);				\
 		fallthrough;						\
 	case 1:	        						\
 		set->sig[0] = op(set->sig[0]);				\
+		break;							\
+	default:							\
+	        for (i = 0; i < _NSIG_WORDS; i++)			\
+			set->sig[i] = op(set->sig[i]);			\
 		break;							\
 	}								\
 }
